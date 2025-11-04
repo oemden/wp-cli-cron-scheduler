@@ -62,6 +62,10 @@ wp plugin update
 `cd  $HOME/www`
 
 
+---
+
+
+
 
 # For Later considerations
 
@@ -93,3 +97,14 @@ wp core verify-checksums - Verify WP core integrity
 wp cron event list - Monitor scheduled events
 
 Most valuable: **db optimize, transient cleanup, core updates, db backups**
+
+# Project's Name
+
+maybe rename the Project as it now manages broader things:
+
+### alternatives:
+
+-> script now covers more automated WP-CLI tasks
+
+- wp-cli-automator 
+- wpcli-automated
