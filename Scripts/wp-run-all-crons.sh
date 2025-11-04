@@ -11,6 +11,7 @@
 source $HOME/.bash_profile
 
 # Move to Wordpress Home Directory
+# TODO: add this as an .env variable
 cd  $HOME/www
 
 # make a list and run jobs one by one

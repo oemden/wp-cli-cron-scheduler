@@ -12,7 +12,10 @@
 source $HOME/.bash_profile
 
 # Move to Wordpress Home Directory
+# TODO: add this as an .env variable
 cd  $HOME/www
+
+#############################################################################
 
 # Get current time in seconds since epoch
 CURRENT_EPOCH=$(date +%s)
