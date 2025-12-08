@@ -4,7 +4,7 @@
 # Unified WordPress management via wp-cli
 # - Cron jobs (bypass Cloudflare WAF anti-bot rules)
 # - Plugin/Theme updates
-version="v0.3.0"
+version="v0.3.1"
 
 #
 # Usage: wp-cli-manager.sh [-c|-C] [-p|-P] [-u|-U] [-t|-T] [-o|-O] [-a|-A]
@@ -26,11 +26,87 @@ version="v0.3.0"
 #     -A  Aggressive mode: -C -P -U -T -O
 
 # n8n fails to find wp, so let's help it:
-source $HOME/.bash_profile
+source $HOME/.bash_profile 2>/dev/null || true
 
-# Environment Variables (with defaults)
-: ${working_directory:="$HOME"}
-: ${wp_directory:="www"}
+#############################################################################
+# .env File Loading
+#############################################################################
+
+load_env_file() {
+  local env_file="$1"
+
+  if [ ! -f "$env_file" ]; then
+    return 0
+  fi
+
+  echo "[INFO] Loading configuration from: $env_file"
+
+  # Read .env file line by line
+  while IFS= read -r line || [ -n "$line" ]; do
+    # Skip comments and empty lines
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+    [[ -z "$line" ]] && continue
+
+    # Remove leading/trailing whitespace
+    line=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+    # Skip if not key=value format
+    [[ ! "$line" =~ ^[a-zA-Z_][a-zA-Z0-9_]*= ]] && continue
+
+    # Split on first =
+    key="${line%%=*}"
+    value="${line#*=}"
+
+    # Remove quotes from value if present
+    value=$(echo "$value" | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")
+
+    # Only set if NOT already set in environment
+    if [ -z "${!key}" ]; then
+      export "$key=$value"
+      echo "[INFO]   $key=$value"
+    else
+      echo "[INFO]   $key (already set, skipping)"
+    fi
+  done < "$env_file"
+}
+
+# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Try to load .env from multiple locations (first found wins)
+# Priority: 1. Script directory, 2. Current directory, 3. Home directory
+if [ -f "${SCRIPT_DIR}/.wp-cli-manager.env" ]; then
+  load_env_file "${SCRIPT_DIR}/.wp-cli-manager.env"
+elif [ -f "${PWD}/.wp-cli-manager.env" ]; then
+  load_env_file "${PWD}/.wp-cli-manager.env"
+elif [ -f "${HOME}/.wp-cli-manager.env" ]; then
+  load_env_file "${HOME}/.wp-cli-manager.env"
+fi
+
+#############################################################################
+# Environment Variables Validation
+#############################################################################
+
+# CRITICAL variables (MUST be set)
+if [ -z "$working_directory" ] || [ -z "$wp_directory" ]; then
+  echo "" >&2
+  echo "ERROR: Missing required configuration!" >&2
+  echo "" >&2
+  echo "The following variables are required:" >&2
+  [ -z "$working_directory" ] && echo "  - working_directory (base directory path)" >&2
+  [ -z "$wp_directory" ] && echo "  - wp_directory (WordPress subdirectory)" >&2
+  echo "" >&2
+  echo "Set them via:" >&2
+  echo "  1. Environment: export working_directory=\"/path/to/base\"" >&2
+  echo "  2. Inline: working_directory=\"/path\" ./wp-cli-manager.sh" >&2
+  echo "  3. Create .wp-cli-manager.env file with:" >&2
+  echo "     working_directory=/path/to/base" >&2
+  echo "     wp_directory=www" >&2
+  echo "" >&2
+  exit 1
+fi
+
+# OPTIONAL variables (set defaults if not provided)
 : ${plugin_mgmt:="true"}
 : ${theme_mgmt:="true"}
 : ${run_all_crons:="false"}

@@ -170,38 +170,85 @@ Same as: `./wp-cli-manager.sh -C -P -U -T -O`
 
 ### Environment Variables
 
-The script **already supports** configuration via environment variables without requiring a `.env` file.
+The script supports configuration via environment variables and `.env` files (v0.3.1+).
 
-#### How It Works
+#### Configuration Precedence
 
-The script uses Bash parameter expansion syntax:
+Variables are loaded in this order (highest priority wins):
+
+1. **Environment variables** - **Highest Priority**
+   - Shell profile (`.bash_profile`, `.bashrc`) and explicit `export` are **on the same level**
+   - Script cannot distinguish between them - whichever is set last wins
+   - Inline syntax: `VAR=value ./script.sh` also uses environment
+2. **`.wp-cli-manager.env` file** - Only loads if variable NOT already in environment
+3. **Script defaults** - Only for optional variables (plugin_mgmt, theme_mgmt, run_all_crons)
+
+**Critical Variables** (REQUIRED):
+- `working_directory` - Must be set via environment or `.env`
+- `wp_directory` - Must be set via environment or `.env`
+
+**Optional Variables** (have defaults):
+- `plugin_mgmt="true"`
+- `theme_mgmt="true"`
+- `run_all_crons="false"`
+
+#### Using `.wp-cli-manager.env` File
+
+Create a `.wp-cli-manager.env` file in one of these locations:
+
+1. **Script directory** (e.g., `Scripts/.wp-cli-manager.env`) - Recommended
+2. **Current directory** (`./.wp-cli-manager.env`)
+3. **Home directory** (`~/.wp-cli-manager.env`)
+
+**Example `.wp-cli-manager.env`:**
 
 ```bash
-: ${working_directory:="$HOME"}
-: ${wp_directory:="www"}
-: ${plugin_mgmt:="true"}
-: ${theme_mgmt:="true"}
-: ${run_all_crons:="false"}
+# wp-cli-manager.sh Configuration File
+
+# REQUIRED: Base directory (usually $HOME or absolute path)
+working_directory=/home/myuser
+
+# REQUIRED: WordPress subdirectory (relative to working_directory)
+wp_directory=public_html
+
+# OPTIONAL: Feature toggles
+plugin_mgmt=true
+theme_mgmt=true
+run_all_crons=false
 ```
 
-**Syntax explanation**: `: ${variable:="default"}`
-- If the environment variable is **already set** (via export, inline, or automation tool like n8n), use that value
-- If **not set**, use the default value
-- The `:` command is a no-op that ensures the variable assignment happens
+**Notes:**
+- Comments start with `#`
+- Values can be quoted or unquoted
+- Environment variables already set override `.env` values
+- First `.env` file found is used (see priority above)
 
 #### Available Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `working_directory` | `$HOME` | Base directory path (user home directory) |
-| `wp_directory` | `www` | WordPress subdirectory relative to working_directory |
+| `working_directory` | **REQUIRED** | Base directory path (e.g., `/home/myuser` or `$HOME`) |
+| `wp_directory` | **REQUIRED** | WordPress subdirectory relative to working_directory |
 | `plugin_mgmt` | `true` | Enable plugin management features |
 | `theme_mgmt` | `true` | Enable theme management features |
 | `run_all_crons` | `false` | Run all crons by default (currently informational) |
 
 #### Usage Examples
 
-**Method 1: Export in shell (persistent for session)**
+**Method 1: Using `.env` file (Recommended)**
+
+Create `Scripts/.wp-cli-manager.env`:
+```bash
+working_directory=/home/myuser
+wp_directory=public_html
+```
+
+Then run:
+```bash
+./wp-cli-manager.sh -a
+```
+
+**Method 2: Export in shell (persistent for session)**
 
 ```bash
 export working_directory="/home/myuser"
@@ -209,13 +256,13 @@ export wp_directory="public_html/wordpress"
 ./wp-cli-manager.sh -a
 ```
 
-**Method 2: Inline (one-time)**
+**Method 3: Inline (one-time)**
 
 ```bash
 working_directory="/home/myuser" wp_directory="public_html" ./wp-cli-manager.sh -a
 ```
 
-**Method 3: Shell profile (persistent across sessions)**
+**Method 4: Shell profile (persistent across sessions)**
 
 ```bash
 # Add to ~/.bash_profile or ~/.bashrc:
@@ -224,22 +271,24 @@ export wp_directory="public_html"
 
 # Then run:
 ./wp-cli-manager.sh -a
-
 ```
 
-**Method 4: n8n SSH node**
-Set environment variables in the node's Environment field:
+**Method 5: n8n SSH node**
 
-```
-working_directory=/home/myuser
-wp_directory=public_html
-```
+**Option A**: Use `.env` file (simpler)
+- Create `.wp-cli-manager.env` in script directory
+- Command: `./Scripts/wp-cli-manager.sh -a`
 
-Command field:
-
-```bash
-./Scripts/wp-cli-manager.sh -a
-```
+**Option B**: Set environment in n8n
+- Environment field:
+  ```
+  working_directory=/home/myuser
+  wp_directory=public_html
+  ```
+- Command field:
+  ```bash
+  ./Scripts/wp-cli-manager.sh -a
+  ```
 
 ### Behavior Matrix
 
