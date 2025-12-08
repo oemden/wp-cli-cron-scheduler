@@ -57,6 +57,7 @@ wp plugin update
 
 ## Other TODOS:
 
+- use .env file, for paths and default options and or user's ENV
 - [ ] Add Wordpress Path as an .env variable ( www -> ${wp_directory} )
 
 `cd  $HOME/www`
