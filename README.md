@@ -77,8 +77,40 @@ n8n accept ssh keys with password by the way.
 ### Basic Syntax
 
 ```bash
-./wp-cli-manager.sh [OPTIONS]
+./wp-cli-manager.sh [-w path | -W alias] [OPTIONS]
 ```
+
+### WordPress Path (v0.4.0+)
+
+The script needs to know which WordPress installation to work with. Three methods available:
+
+#### Method 1: Explicit Path (`-w`)
+```bash
+./wp-cli-manager.sh -w /home/user/site1 -a
+```
+
+#### Method 2: Alias (`-W`)
+Create `~/.wp-cli-manager-sites.env` with site aliases:
+```bash
+SITE1=/home/user/wordpress1
+SITE2=/home/user/public_html
+```
+
+Then use:
+```bash
+./wp-cli-manager.sh -W SITE1 -a
+```
+
+#### Method 3: Current Directory (default)
+```bash
+cd /home/user/wordpress
+./wp-cli-manager.sh -a
+```
+
+**Notes:**
+- `-w` and `-W` are mutually exclusive
+- If neither specified, uses current directory
+- Each WordPress site can have its own `.wp-cli-manager.env` config
 
 ### CLI Flags
 
@@ -112,183 +144,113 @@ n8n accept ssh keys with password by the way.
 
 ### Usage Examples
 
-#### Default Behavior (No Flags)
+#### Default Behavior (No Path, No Flags)
 ```bash
+cd /home/user/wordpress
 ./wp-cli-manager.sh
 ```
-**Behavior**: Runs safe mode (`-a`)
+**Behavior**: Uses current directory, runs safe mode (`-a`)
 - ✓ Pending cron jobs only
 - ✓ Active plugins with auto-update ON
 - ✓ Active themes with auto-update ON
 
-#### Run Only Pending Cron Jobs
+#### Using Explicit Path
 ```bash
-./wp-cli-manager.sh -c
+# Run pending crons on specific site
+./wp-cli-manager.sh -w /home/user/site1 -c
+
+# Safe mode on specific site
+./wp-cli-manager.sh -w /home/user/site2 -a
 ```
 
-#### Run ALL Cron Jobs (Aggressive)
+#### Using Aliases
 ```bash
-./wp-cli-manager.sh -C
+# Run aggressive mode on aliased site
+./wp-cli-manager.sh -W SITE1 -A
+
+# Update plugins only
+./wp-cli-manager.sh -W SITE2 -p -u
 ```
 
-#### Update Active Plugins with Auto-Update ON
+#### Action Flags Examples
 ```bash
-./wp-cli-manager.sh -p -u
+# Run only pending cron jobs
+./wp-cli-manager.sh -w /path/to/wp -c
+
+# Run ALL cron jobs (aggressive)
+./wp-cli-manager.sh -w /path/to/wp -C
+
+# Update active plugins with auto-update ON
+./wp-cli-manager.sh -w /path/to/wp -p -u
+
+# Update ALL plugins (active + inactive, auto-update ON/OFF)
+./wp-cli-manager.sh -w /path/to/wp -P -U
+
+# Combined: Pending crons + plugin updates
+./wp-cli-manager.sh -w /path/to/wp -c -p -u
+
+# Safe mode (explicit)
+./wp-cli-manager.sh -w /path/to/wp -a
+# Same as: -c -p -u -t -o
+
+# Aggressive mode
+./wp-cli-manager.sh -w /path/to/wp -A
+# Same as: -C -P -U -T -O
 ```
 
-#### Update ALL Plugins (Active + Inactive, Auto-Update ON/OFF)
-```bash
-./wp-cli-manager.sh -P -U
-```
+### Configuration Files (v0.4.0+)
 
-#### Update Active Themes with Auto-Update ON
-```bash
-./wp-cli-manager.sh -t -o
-```
+#### Site-Specific Configuration
 
-#### Combined: Pending Crons + Plugin Updates
-```bash
-./wp-cli-manager.sh -c -p -u
-```
+Each WordPress installation can have its own `.wp-cli-manager.env` file in the WordPress root directory.
 
-#### Combined: Pending Crons + All Plugin & Theme Updates
-```bash
-./wp-cli-manager.sh -c -P -U -T -O
-```
-
-#### Safe Mode (Explicit)
-```bash
-./wp-cli-manager.sh -a
-```
-Same as: `./wp-cli-manager.sh -c -p -u -t -o`
-
-#### Aggressive Mode
-```bash
-./wp-cli-manager.sh -A
-```
-Same as: `./wp-cli-manager.sh -C -P -U -T -O`
-
-### Environment Variables
-
-The script supports configuration via environment variables and `.env` files (v0.3.1+).
-
-#### Configuration Precedence
-
-Variables are loaded in this order (highest priority wins):
-
-1. **Environment variables** - **Highest Priority**
-   - Shell profile (`.bash_profile`, `.bashrc`) and explicit `export` are **on the same level**
-   - Script cannot distinguish between them - whichever is set last wins
-   - Inline syntax: `VAR=value ./script.sh` also uses environment
-2. **`.wp-cli-manager.env` file** - Only loads if variable NOT already in environment
-3. **Script defaults** - Only for optional variables (plugin_mgmt, theme_mgmt, run_all_crons)
-
-**Critical Variables** (REQUIRED):
-- `working_directory` - Must be set via environment or `.env`
-- `wp_directory` - Must be set via environment or `.env`
-
-**Optional Variables** (have defaults):
-- `plugin_mgmt="true"`
-- `theme_mgmt="true"`
-- `run_all_crons="false"`
-
-#### Using `.wp-cli-manager.env` File
-
-Create a `.wp-cli-manager.env` file in one of these locations:
-
-1. **Script directory** (e.g., `Scripts/.wp-cli-manager.env`) - Recommended
-2. **Current directory** (`./.wp-cli-manager.env`)
-3. **Home directory** (`~/.wp-cli-manager.env`)
+**Location**: `<wordpress-root>/.wp-cli-manager.env`
 
 **Example `.wp-cli-manager.env`:**
-
 ```bash
-# wp-cli-manager.sh Configuration File
-
-# REQUIRED: Base directory (usually $HOME or absolute path)
-working_directory=/home/myuser
-
-# REQUIRED: WordPress subdirectory (relative to working_directory)
-wp_directory=public_html
-
-# OPTIONAL: Feature toggles
+# Site-specific configuration
+# Optional: Feature toggles (default: true)
 plugin_mgmt=true
 theme_mgmt=true
+
+# Optional: Run all crons by default (default: false)
 run_all_crons=false
 ```
 
-**Notes:**
-- Comments start with `#`
-- Values can be quoted or unquoted
-- Environment variables already set override `.env` values
-- First `.env` file found is used (see priority above)
+**Configuration Precedence**:
+1. **CLI flags** (highest priority)
+2. **`.wp-cli-manager.env`** file (in WordPress root)
+3. **Script defaults** (lowest priority)
 
-#### Available Variables
+#### Sites Aliases Configuration
+
+For managing multiple WordPress installations, create a sites file in your home directory.
+
+**Location**: `~/.wp-cli-manager-sites.env`
+
+**Example `~/.wp-cli-manager-sites.env`:**
+```bash
+# Define site aliases
+SITE1=/home/user/wordpress1
+SITE2=/home/user/public_html
+SITE3=/home/user/websites/blog
+```
+
+**Usage:**
+```bash
+./wp-cli-manager.sh -W SITE1 -a
+./wp-cli-manager.sh -W SITE2 -C
+```
+
+#### Available Configuration Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `working_directory` | **REQUIRED** | Base directory path (e.g., `/home/myuser` or `$HOME`) |
-| `wp_directory` | **REQUIRED** | WordPress subdirectory relative to working_directory |
 | `plugin_mgmt` | `true` | Enable plugin management features |
 | `theme_mgmt` | `true` | Enable theme management features |
 | `run_all_crons` | `false` | Run all crons by default (currently informational) |
 
-#### Usage Examples
-
-**Method 1: Using `.env` file (Recommended)**
-
-Create `Scripts/.wp-cli-manager.env`:
-```bash
-working_directory=/home/myuser
-wp_directory=public_html
-```
-
-Then run:
-```bash
-./wp-cli-manager.sh -a
-```
-
-**Method 2: Export in shell (persistent for session)**
-
-```bash
-export working_directory="/home/myuser"
-export wp_directory="public_html/wordpress"
-./wp-cli-manager.sh -a
-```
-
-**Method 3: Inline (one-time)**
-
-```bash
-working_directory="/home/myuser" wp_directory="public_html" ./wp-cli-manager.sh -a
-```
-
-**Method 4: Shell profile (persistent across sessions)**
-
-```bash
-# Add to ~/.bash_profile or ~/.bashrc:
-export working_directory="/home/myuser"
-export wp_directory="public_html"
-
-# Then run:
-./wp-cli-manager.sh -a
-```
-
-**Method 5: n8n SSH node**
-
-**Option A**: Use `.env` file (simpler)
-- Create `.wp-cli-manager.env` in script directory
-- Command: `./Scripts/wp-cli-manager.sh -a`
-
-**Option B**: Set environment in n8n
-- Environment field:
-  ```
-  working_directory=/home/myuser
-  wp_directory=public_html
-  ```
-- Command field:
-  ```bash
-  ./Scripts/wp-cli-manager.sh -a
-  ```
+**Note**: Path configuration (`working_directory`, `wp_directory`) removed in v0.4.0. Use `-w`/`-W` flags instead.
 
 ### Behavior Matrix
 
@@ -314,13 +276,29 @@ When using with n8n SSH node:
 **Execute Command Node:**
 
 ```bash
-cd /home/username && ./Scripts/wp-cli-manager.sh -a
+# Method 1: Using explicit path (-w)
+./Scripts/wp-cli-manager.sh -w /home/username/public_html -a
+
+# Method 2: Using site alias (-W)
+# First create ~/.wp-cli-manager-sites.env with:
+# PROD=/home/username/public_html
+./Scripts/wp-cli-manager.sh -W PROD -a
+
+# Method 3: cd first, then run
+cd /home/username/public_html && ./Scripts/wp-cli-manager.sh -a
 ```
 
-Or with environment variables:
+**Multi-Site Workflow Examples:**
 
 ```bash
-working_directory="/home/username" wp_directory="public_html" ./Scripts/wp-cli-manager.sh -c
+# Workflow 1 - Site 1 (hourly pending crons)
+./Scripts/wp-cli-manager.sh -W SITE1 -c
+
+# Workflow 2 - Site 2 (daily safe updates)
+./Scripts/wp-cli-manager.sh -W SITE2 -a
+
+# Workflow 3 - Site 3 (weekly aggressive updates)
+./Scripts/wp-cli-manager.sh -W SITE3 -A
 ```
 
 **Schedule Examples:**

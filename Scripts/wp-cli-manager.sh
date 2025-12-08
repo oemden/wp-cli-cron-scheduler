@@ -4,10 +4,14 @@
 # Unified WordPress management via wp-cli
 # - Cron jobs (bypass Cloudflare WAF anti-bot rules)
 # - Plugin/Theme updates
-version="v0.3.1"
+version="v0.4.0"
 
 #
-# Usage: wp-cli-manager.sh [-c|-C] [-p|-P] [-u|-U] [-t|-T] [-o|-O] [-a|-A]
+# Usage: wp-cli-manager.sh [-w path | -W alias] [-c|-C] [-p|-P] [-u|-U] [-t|-T] [-o|-O] [-a|-A]
+#   WP Path (mutually exclusive):
+#     -w  Explicit WordPress path (e.g., -w /home/user/site1)
+#     -W  Alias from ~/.wp-cli-manager-sites.env (e.g., -W SITE1)
+#     (default: current directory if neither specified)
 #   Cron:
 #     -c  Run pending cron jobs (time-based)
 #     -C  Run ALL cron jobs (ignore schedule)
@@ -29,9 +33,79 @@ version="v0.3.1"
 source $HOME/.bash_profile 2>/dev/null || true
 
 #############################################################################
-# .env File Loading
+# WP Path Resolution and Configuration
 #############################################################################
 
+# Initialize path flags
+WP_PATH_EXPLICIT=""
+WP_PATH_ALIAS=""
+
+# Parse wp path options first (need to extract -w and -W before other flags)
+while getopts ":w:W:cCpPuUtToOaA" opt; do
+  case $opt in
+    w) WP_PATH_EXPLICIT="$OPTARG" ;;
+    W) WP_PATH_ALIAS="$OPTARG" ;;
+    \?) ;; # Ignore unknown options for now
+  esac
+done
+OPTIND=1  # Reset for second parse
+
+# Validate mutually exclusive flags
+if [ -n "$WP_PATH_EXPLICIT" ] && [ -n "$WP_PATH_ALIAS" ]; then
+  echo "" >&2
+  echo "ERROR: Flags -w and -W are mutually exclusive!" >&2
+  echo "Use either -w (explicit path) OR -W (alias), not both." >&2
+  echo "" >&2
+  exit 1
+fi
+
+# Resolve wp_path
+if [ -n "$WP_PATH_EXPLICIT" ]; then
+  # Mode 1: Explicit path via -w
+  wp_path="$WP_PATH_EXPLICIT"
+  echo "[INFO] Using explicit WordPress path: $wp_path"
+
+elif [ -n "$WP_PATH_ALIAS" ]; then
+  # Mode 2: Alias from sites file via -W
+  SITES_FILE="${HOME}/.wp-cli-manager-sites.env"
+
+  if [ ! -f "$SITES_FILE" ]; then
+    echo "" >&2
+    echo "ERROR: Sites file not found: $SITES_FILE" >&2
+    echo "Create it with site aliases, e.g.:" >&2
+    echo "  SITE1=/home/user/wordpress1" >&2
+    echo "  SITE2=/home/user/wordpress2" >&2
+    echo "" >&2
+    exit 1
+  fi
+
+  # Load alias from sites file
+  wp_path=$(grep "^${WP_PATH_ALIAS}=" "$SITES_FILE" | cut -d'=' -f2- | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")
+
+  if [ -z "$wp_path" ]; then
+    echo "" >&2
+    echo "ERROR: Alias '$WP_PATH_ALIAS' not found in $SITES_FILE" >&2
+    echo "" >&2
+    exit 1
+  fi
+
+  echo "[INFO] Using aliased WordPress path: $WP_PATH_ALIAS -> $wp_path"
+
+else
+  # Mode 3: Default to current directory
+  wp_path="$PWD"
+  echo "[INFO] Using current directory as WordPress path: $wp_path"
+fi
+
+# Validate wp_path exists
+if [ ! -d "$wp_path" ]; then
+  echo "" >&2
+  echo "ERROR: WordPress path does not exist: $wp_path" >&2
+  echo "" >&2
+  exit 1
+fi
+
+# Load site-specific .env file from WordPress directory
 load_env_file() {
   local env_file="$1"
 
@@ -39,7 +113,7 @@ load_env_file() {
     return 0
   fi
 
-  echo "[INFO] Loading configuration from: $env_file"
+  echo "[INFO] Loading site configuration from: $env_file"
 
   # Read .env file line by line
   while IFS= read -r line || [ -n "$line" ]; do
@@ -60,59 +134,25 @@ load_env_file() {
     # Remove quotes from value if present
     value=$(echo "$value" | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")
 
-    # Only set if NOT already set in environment
-    if [ -z "${!key}" ]; then
-      export "$key=$value"
-      echo "[INFO]   $key=$value"
-    else
-      echo "[INFO]   $key (already set, skipping)"
-    fi
+    # Always load from .env (overwrites environment)
+    export "$key=$value"
+    echo "[INFO]   $key=$value"
   done < "$env_file"
 }
 
-# Get script directory
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-# Try to load .env from multiple locations (first found wins)
-# Priority: 1. Script directory, 2. Current directory, 3. Home directory
-if [ -f "${SCRIPT_DIR}/.wp-cli-manager.env" ]; then
-  load_env_file "${SCRIPT_DIR}/.wp-cli-manager.env"
-elif [ -f "${PWD}/.wp-cli-manager.env" ]; then
-  load_env_file "${PWD}/.wp-cli-manager.env"
-elif [ -f "${HOME}/.wp-cli-manager.env" ]; then
-  load_env_file "${HOME}/.wp-cli-manager.env"
+# Load configuration from WordPress directory
+ENV_FILE="${wp_path}/.wp-cli-manager.env"
+if [ -f "$ENV_FILE" ]; then
+  load_env_file "$ENV_FILE"
 fi
 
-#############################################################################
-# Environment Variables Validation
-#############################################################################
-
-# CRITICAL variables (MUST be set)
-if [ -z "$working_directory" ] || [ -z "$wp_directory" ]; then
-  echo "" >&2
-  echo "ERROR: Missing required configuration!" >&2
-  echo "" >&2
-  echo "The following variables are required:" >&2
-  [ -z "$working_directory" ] && echo "  - working_directory (base directory path)" >&2
-  [ -z "$wp_directory" ] && echo "  - wp_directory (WordPress subdirectory)" >&2
-  echo "" >&2
-  echo "Set them via:" >&2
-  echo "  1. Environment: export working_directory=\"/path/to/base\"" >&2
-  echo "  2. Inline: working_directory=\"/path\" ./wp-cli-manager.sh" >&2
-  echo "  3. Create .wp-cli-manager.env file with:" >&2
-  echo "     working_directory=/path/to/base" >&2
-  echo "     wp_directory=www" >&2
-  echo "" >&2
-  exit 1
-fi
-
-# OPTIONAL variables (set defaults if not provided)
+# Set optional variables with defaults
 : ${plugin_mgmt:="true"}
 : ${theme_mgmt:="true"}
 : ${run_all_crons:="false"}
 
 # Move to WordPress directory
-cd "${working_directory}/${wp_directory}" || exit 1
+cd "$wp_path" || exit 1
 
 # CLI Flags
 FLAG_CRON_PENDING=false
@@ -126,9 +166,10 @@ FLAG_THEME_ALL_STATUS=false
 FLAG_THEME_AUTOUPDATE=false
 FLAG_THEME_ALL_AUTOUPDATE=false
 
-# Parse options
-while getopts "cCpPuUtToOaA" opt; do
+# Parse action options (second pass after wp path resolution)
+while getopts ":w:W:cCpPuUtToOaA" opt; do
   case $opt in
+    w|W) ;; # Already handled in first pass
     c) FLAG_CRON_PENDING=true ;;
     C) FLAG_CRON_ALL=true ;;
     p) FLAG_PLUGIN_ACTIVE=true ;;
@@ -153,7 +194,8 @@ while getopts "cCpPuUtToOaA" opt; do
        FLAG_THEME_ALL_STATUS=true
        FLAG_THEME_ALL_AUTOUPDATE=true
        ;;
-    *) echo "Usage: $0 [-c|-C] [-p|-P] [-u|-U] [-t|-T] [-o|-O] [-a|-A]" >&2; exit 1 ;;
+    \?) echo "ERROR: Unknown option -$OPTARG" >&2; exit 1 ;;
+    :) echo "ERROR: Option -$OPTARG requires an argument" >&2; exit 1 ;;
   esac
 done
 
