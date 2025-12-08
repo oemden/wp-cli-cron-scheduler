@@ -16,7 +16,7 @@ It works, but calling `php /path-to-wp-directory/www/wp-cron.php` from the cli w
 Error: WP-Cron spawn failed with error: cURL error 7: Failed to connect to your_wp_exemple.com port 443: Connection refused
 ```
 
-So we'll then use `wp-cli` ( refer to this post on how to install it on OVH Mutualisé: ). 
+Trick is to use `wp-cli` ( refer to this post on how to install it on OVH Mutualisé: ). 
 `wp cron list` will work just fine, and calling a job too: `wp cron event run wp_site_health_scheduled_check` and, oh irony, `wp cron test` will fail.
 Also `wp cron event run` can not run "all Jobs" like the `wp cron test` command does so we list cron jobs and run them in a loop.
 
@@ -27,6 +27,7 @@ n8n will run SSH command on a schedule (e.g., hourly) and trigger cron jobs.
 A single, unified script that manages WordPress cron jobs, plugin updates, and theme updates via `wp-cli`. It uses CLI flags to control execution mode and bypass Cloudflare's Anti-bot WAF rules.
 
 **Key Features:**
+
 - **Cron Management**: Run pending jobs (time-based) or all jobs (aggressive)
 - **Plugin Updates**: Update active/inactive plugins with auto-update on/off filtering
 - **Theme Updates**: Update active/inactive themes with auto-update on/off filtering
@@ -63,6 +64,22 @@ n8n accept ssh keys with password by the way.
 
 - copy the script. If you want a ready to go option, place them in your web hosting Home directory under `/$HOME/Scripts` or anywhere you want and adapt the scripts and n8n workflow accordingly.
 
+**Add it to your $PATH**
+
+If you have a `$HOME/bin` directory, copy it there or create a symlink, so the script can then be called like any other exec or from automation workflows ( like n8n )
+
+```
+ln -s $HOME/path/to/Scripts/wp-cli-manager.sh $HOME/bin/wp-cli-manager
+```
+
+Set it in your .bash_profile:
+
+```
+PATH=$PATH:$HOME/bin:/bin
+```
+
+Making it easier to call the script from within any Wordpress directory.
+
 ### n8n
 
 - Install this workflow: [link Coming soon]()
@@ -85,11 +102,13 @@ n8n accept ssh keys with password by the way.
 The script needs to know which WordPress installation to work with. Three methods available:
 
 #### Method 1: Explicit Path (`-w`)
+
 ```bash
 ./wp-cli-manager.sh -w /home/user/site1 -a
 ```
 
 #### Method 2: Alias (`-W`)
+
 Create `~/.wp-cli-manager-sites.env` with site aliases:
 ```bash
 SITE1=/home/user/wordpress1
@@ -102,12 +121,14 @@ Then use:
 ```
 
 #### Method 3: Current Directory (default)
+
 ```bash
 cd /home/user/wordpress
 ./wp-cli-manager.sh -a
 ```
 
 **Notes:**
+
 - `-w` and `-W` are mutually exclusive
 - If neither specified, uses current directory
 - Each WordPress site can have its own `.wp-cli-manager.env` config
@@ -115,10 +136,12 @@ cd /home/user/wordpress
 ### CLI Flags
 
 #### Cron Management
+
 - `-c` : Run **pending** cron jobs only (checks `next_run_gmt` <= current time)
 - `-C` : Run **ALL** cron jobs (ignores schedule - aggressive mode)
 
 #### Plugin Management
+
 - `-p` : Filter by **active** plugins only
 - `-P` : Include **all** plugin statuses (active + inactive)
 - `-u` : Filter by **auto-update ON** only
@@ -127,6 +150,7 @@ cd /home/user/wordpress
 *Note: Plugin updates require **both** a status flag (`-p` or `-P`) AND an auto-update flag (`-u` or `-U`)*
 
 #### Theme Management
+
 - `-t` : Filter by **active** themes only
 - `-T` : Include **all** theme statuses (active + inactive)
 - `-o` : Filter by **auto-update ON** only
@@ -135,6 +159,7 @@ cd /home/user/wordpress
 *Note: Theme updates require **both** a status flag (`-t` or `-T`) AND an auto-update flag (`-o` or `-O`)*
 
 #### Shortcut Modes
+
 - `-a` : **Safe mode** (default when no flags provided)
   - Equivalent to: `-c -p -u -t -o`
   - Runs pending crons + updates active plugins/themes with auto-update ON
@@ -145,6 +170,7 @@ cd /home/user/wordpress
 ### Usage Examples
 
 #### Default Behavior (No Path, No Flags)
+
 ```bash
 cd /home/user/wordpress
 ./wp-cli-manager.sh
@@ -155,15 +181,17 @@ cd /home/user/wordpress
 - ✓ Active themes with auto-update ON
 
 #### Using Explicit Path
+
 ```bash
 # Run pending crons on specific site
-./wp-cli-manager.sh -w /home/user/site1 -c
+./wp-cli-manager.sh -w /$HOME/site1 -c
 
 # Safe mode on specific site
 ./wp-cli-manager.sh -w /home/user/site2 -a
 ```
 
 #### Using Aliases
+
 ```bash
 # Run aggressive mode on aliased site
 ./wp-cli-manager.sh -W SITE1 -A
@@ -173,9 +201,10 @@ cd /home/user/wordpress
 ```
 
 #### Action Flags Examples
+
 ```bash
 # Run only pending cron jobs
-./wp-cli-manager.sh -w /path/to/wp -c
+./wp-cli-manager.sh -W SITE1  -c
 
 # Run ALL cron jobs (aggressive)
 ./wp-cli-manager.sh -w /path/to/wp -C
@@ -207,20 +236,34 @@ Each WordPress installation can have its own `.wp-cli-manager.env` file in the W
 **Location**: `<wordpress-root>/.wp-cli-manager.env`
 
 **Example `.wp-cli-manager.env`:**
+
 ```bash
 # Site-specific configuration
-# Optional: Feature toggles (default: true)
+# These provide defaults when NO CLI flags are specified
+# CLI flags ALWAYS override these values
+
+# Feature toggles (enable/disable entire categories)
 plugin_mgmt=true
 theme_mgmt=true
+cron_mgmt=true
 
-# Optional: Run all crons by default (default: false)
-run_all_crons=false
+# Cron defaults (when -c/-C not specified)
+cron_mgmt_all=false          # true = -C (all), false = -c (pending)
+
+# Plugin defaults (when -p/-P/-u/-U not specified)
+plugin_mgmt_all_status=false          # true = -P (all), false = -p (active)
+plugin_mgmt_all_autoupdate=false      # true = -U (all), false = -u (auto-on)
+
+# Theme defaults (when -t/-T/-o/-O not specified)
+theme_mgmt_all_status=false           # true = -T (all), false = -t (active)
+theme_mgmt_all_autoupdate=false       # true = -O (all), false = -o (auto-on)
 ```
 
 **Configuration Precedence**:
-1. **CLI flags** (highest priority)
-2. **`.wp-cli-manager.env`** file (in WordPress root)
-3. **Script defaults** (lowest priority)
+
+1. **CLI flags** (highest priority) - Always override everything
+2. **`.wp-cli-manager.env`** defaults - Applied when no CLI flags provided
+3. **Script defaults** (lowest priority) - Conservative safe mode
 
 #### Sites Aliases Configuration
 
@@ -229,14 +272,16 @@ For managing multiple WordPress installations, create a sites file in your home 
 **Location**: `~/.wp-cli-manager-sites.env`
 
 **Example `~/.wp-cli-manager-sites.env`:**
+
 ```bash
 # Define site aliases
 SITE1=/home/user/wordpress1
-SITE2=/home/user/public_html
-SITE3=/home/user/websites/blog
+SITE2=/$HOME/public_html
+SITE3=/path/to/websites/blog
 ```
 
 **Usage:**
+
 ```bash
 ./wp-cli-manager.sh -W SITE1 -a
 ./wp-cli-manager.sh -W SITE2 -C
@@ -244,11 +289,67 @@ SITE3=/home/user/websites/blog
 
 #### Available Configuration Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `plugin_mgmt` | `true` | Enable plugin management features |
-| `theme_mgmt` | `true` | Enable theme management features |
-| `run_all_crons` | `false` | Run all crons by default (currently informational) |
+| Variable | Default | Maps to Flag | Description |
+|----------|---------|--------------|-------------|
+| **Feature Toggles** ||||
+| `plugin_mgmt` | `true` | - | Enable plugin management features |
+| `theme_mgmt` | `true` | - | Enable theme management features |
+| `cron_mgmt` | `true` | - | Enable cron management features |
+| **Cron Defaults** ||||
+| `cron_mgmt_all` | `false` | `true`=`-C`, `false`=`-c` | Run all crons vs pending only |
+| **Plugin Defaults** ||||
+| `plugin_mgmt_all_status` | `false` | `true`=`-P`, `false`=`-p` | All plugins vs active only |
+| `plugin_mgmt_all_autoupdate` | `false` | `true`=`-U`, `false`=`-u` | All auto-update states vs ON only |
+| **Theme Defaults** ||||
+| `theme_mgmt_all_status` | `false` | `true`=`-T`, `false`=`-t` | All themes vs active only |
+| `theme_mgmt_all_autoupdate` | `false` | `true`=`-O`, `false`=`-o` | All auto-update states vs ON only |
+
+**How It Works:**
+
+- **No CLI flags**: Script uses `.env` defaults (or safe mode if no `.env`)
+- **With CLI flags**: CLI flags override `.env` completely
+- **Feature toggles**: Set to `false` to completely disable a category
+
+**Example Scenarios:**
+
+1. **Conservative Production Site**
+
+   ```bash
+   # .env settings
+   cron_mgmt_all=false
+   plugin_mgmt_all_status=false
+   plugin_mgmt_all_autoupdate=false
+   theme_mgmt_all_status=false
+   theme_mgmt_all_autoupdate=false
+
+   # Run with no flags
+   ./wp-cli-manager.sh -W PROD
+   # → Applies safe .env defaults (pending crons, active+auto-on only)
+   ```
+
+2. **Aggressive Staging Site**
+ 
+   ```bash
+   # .env settings
+   cron_mgmt_all=true
+   plugin_mgmt_all_status=true
+   plugin_mgmt_all_autoupdate=true
+   theme_mgmt_all_status=true
+   theme_mgmt_all_autoupdate=true
+
+   # Run with no flags
+   ./wp-cli-manager.sh -W STAGING
+   # → Applies aggressive .env defaults (all crons, all plugins/themes)
+   ```
+
+3. **Override .env with CLI Flags**
+
+   ```bash
+   # .env has conservative defaults
+   # But this run needs aggressive mode
+   ./wp-cli-manager.sh -W PROD -A
+   # → CLI flags override .env, runs aggressive mode
+   ```
 
 **Note**: Path configuration (`working_directory`, `wp_directory`) removed in v0.4.0. Use `-w`/`-W` flags instead.
 
@@ -302,6 +403,7 @@ cd /home/username/public_html && ./Scripts/wp-cli-manager.sh -a
 ```
 
 **Schedule Examples:**
+
 - **Hourly**: Run pending crons: `-c`
 - **Daily**: Safe mode updates: `-a`
 - **Weekly**: Aggressive mode: `-A`

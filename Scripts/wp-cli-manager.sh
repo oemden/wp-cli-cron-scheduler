@@ -4,7 +4,7 @@
 # Unified WordPress management via wp-cli
 # - Cron jobs (bypass Cloudflare WAF anti-bot rules)
 # - Plugin/Theme updates
-version="v0.4.0"
+version="v0.4.1"
 
 #
 # Usage: wp-cli-manager.sh [-w path | -W alias] [-c|-C] [-p|-P] [-u|-U] [-t|-T] [-o|-O] [-a|-A]
@@ -149,7 +149,12 @@ fi
 # Set optional variables with defaults
 : ${plugin_mgmt:="true"}
 : ${theme_mgmt:="true"}
-: ${run_all_crons:="false"}
+: ${cron_mgmt:="true"}
+: ${cron_mgmt_all:="false"}
+: ${plugin_mgmt_all_status:="false"}
+: ${plugin_mgmt_all_autoupdate:="false"}
+: ${theme_mgmt_all_status:="false"}
+: ${theme_mgmt_all_autoupdate:="false"}
 
 # Move to WordPress directory
 cd "$wp_path" || exit 1
@@ -277,18 +282,63 @@ update_wp_component() {
 # Main Execution
 #############################################################################
 
-# Default behavior (no flags): safe mode (-a)
+# Apply env defaults when NO CLI flags provided
 if [ "$FLAG_CRON_PENDING" = false ] && [ "$FLAG_CRON_ALL" = false ] && \
    [ "$FLAG_PLUGIN_ACTIVE" = false ] && [ "$FLAG_PLUGIN_ALL_STATUS" = false ] && \
    [ "$FLAG_PLUGIN_AUTOUPDATE" = false ] && [ "$FLAG_PLUGIN_ALL_AUTOUPDATE" = false ] && \
    [ "$FLAG_THEME_ACTIVE" = false ] && [ "$FLAG_THEME_ALL_STATUS" = false ] && \
    [ "$FLAG_THEME_AUTOUPDATE" = false ] && [ "$FLAG_THEME_ALL_AUTOUPDATE" = false ]; then
-  echo "=== Default mode: -a (safe mode) ==="
-  FLAG_CRON_PENDING=true
-  FLAG_PLUGIN_ACTIVE=true
-  FLAG_PLUGIN_AUTOUPDATE=true
-  FLAG_THEME_ACTIVE=true
-  FLAG_THEME_AUTOUPDATE=true
+
+  echo "=== No CLI flags detected, applying .env defaults ==="
+
+  # Apply cron defaults (if cron_mgmt enabled)
+  if [ "$cron_mgmt" = "true" ]; then
+    if [ "$cron_mgmt_all" = "true" ]; then
+      FLAG_CRON_ALL=true
+      echo "[ENV] cron_mgmt_all=true -> FLAG_CRON_ALL"
+    else
+      FLAG_CRON_PENDING=true
+      echo "[ENV] cron_mgmt_all=false -> FLAG_CRON_PENDING"
+    fi
+  fi
+
+  # Apply plugin defaults (if plugin_mgmt enabled)
+  if [ "$plugin_mgmt" = "true" ]; then
+    if [ "$plugin_mgmt_all_status" = "true" ]; then
+      FLAG_PLUGIN_ALL_STATUS=true
+      echo "[ENV] plugin_mgmt_all_status=true -> FLAG_PLUGIN_ALL_STATUS"
+    else
+      FLAG_PLUGIN_ACTIVE=true
+      echo "[ENV] plugin_mgmt_all_status=false -> FLAG_PLUGIN_ACTIVE"
+    fi
+
+    if [ "$plugin_mgmt_all_autoupdate" = "true" ]; then
+      FLAG_PLUGIN_ALL_AUTOUPDATE=true
+      echo "[ENV] plugin_mgmt_all_autoupdate=true -> FLAG_PLUGIN_ALL_AUTOUPDATE"
+    else
+      FLAG_PLUGIN_AUTOUPDATE=true
+      echo "[ENV] plugin_mgmt_all_autoupdate=false -> FLAG_PLUGIN_AUTOUPDATE"
+    fi
+  fi
+
+  # Apply theme defaults (if theme_mgmt enabled)
+  if [ "$theme_mgmt" = "true" ]; then
+    if [ "$theme_mgmt_all_status" = "true" ]; then
+      FLAG_THEME_ALL_STATUS=true
+      echo "[ENV] theme_mgmt_all_status=true -> FLAG_THEME_ALL_STATUS"
+    else
+      FLAG_THEME_ACTIVE=true
+      echo "[ENV] theme_mgmt_all_status=false -> FLAG_THEME_ACTIVE"
+    fi
+
+    if [ "$theme_mgmt_all_autoupdate" = "true" ]; then
+      FLAG_THEME_ALL_AUTOUPDATE=true
+      echo "[ENV] theme_mgmt_all_autoupdate=true -> FLAG_THEME_ALL_AUTOUPDATE"
+    else
+      FLAG_THEME_AUTOUPDATE=true
+      echo "[ENV] theme_mgmt_all_autoupdate=false -> FLAG_THEME_AUTOUPDATE"
+    fi
+  fi
 fi
 
 # Execute cron jobs
