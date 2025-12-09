@@ -1,13 +1,18 @@
 # Useful WP-CLI cron features:
 
+**Output**
+
+- [ ] format output in JSON (for n8n or automation)
+- [ ] Error handling ( message errors )
+- [ ] continue on errors {true,false}
+- [ ] final message on completion ( for Automation -> messages Slack emails... )
+
+
 ## Updates:
 
-wp plugin update
-wp plugin update
-
 - **Options:**
-    - [] only "status" `active` {true,false}
-    - [] only "auto_update" `on`  {true,false}
+    - [x] only "status" `active` {true,false}
+    - [x] only "auto_update" `on`  {true,false}
 
         - if 'status' is [ <only active {true,false}> ] && auto_update and 'update' <available> and auto-update <on>
 
