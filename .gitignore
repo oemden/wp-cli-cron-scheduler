@@ -2,3 +2,5 @@
 work
 .DS_Store
 claude.md
+.wp-cli-manager.env
+.wp-cli-manager-sites.env
